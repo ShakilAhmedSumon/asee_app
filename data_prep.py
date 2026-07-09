@@ -12,6 +12,12 @@ def prepapre_data(df, ug_ft, phd_ft, ttt):
     df = df.copy()
     df = df.fillna(0)
 
+    excluded_disciplines = {
+        "Architectural Engineering",
+        "Engineering (General)",
+    }
+    df = df[~df["Discipline Name"].isin(excluded_disciplines)]
+
     # ------------------------------------------------------------------
     # 1. Clean columns needed for doctoral ratio D
     # ------------------------------------------------------------------
