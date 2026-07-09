@@ -22,10 +22,12 @@ st.markdown(
     """
 )
 
+raw_data_path = '/data/raw_data_v3.xlsx'
+
 # -------------------------------------------------------------------
 # Read data directly from local folder
 # -------------------------------------------------------------------
-raw_df = pd.read_excel('../data/raw_data_v3.xlsx')
+raw_df = pd.read_excel(raw_data_path)
 
 # st.caption(f"Loaded data from: `{DATA_PATH.name}`")
 # -------------------------------------------------------------------
