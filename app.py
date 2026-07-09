@@ -22,7 +22,7 @@ st.markdown(
     """
 )
 
-raw_data_path = '/data/raw_data_v3.xlsx'
+raw_data_path = 'data/raw_data_v3.xlsx'
 
 # -------------------------------------------------------------------
 # Read data directly from local folder
