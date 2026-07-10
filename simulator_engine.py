@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 import matplotlib.colors as mcolors
@@ -46,7 +48,7 @@ def simulate_osu_latest_year(
     Important:
     - Peer schools are unchanged.
     - AAU benchmarks are unchanged.
-    - Only OSU's latest-year R, S, D, and related fields are recalculated.
+    - Only OSU's latest-year R, STAR, D, and related fields are recalculated.
     """
 
     df_sim = df_prepared.copy()
@@ -84,6 +86,7 @@ def simulate_osu_latest_year(
         "Masters Full Time Sum",
         "Masters Part Time Sum",
         "D_AAU",
+        "STAR_AAU",
         "S_AAU",
         "R_AAU",
         "Rs_AAU_SCH",
@@ -154,7 +157,7 @@ def simulate_osu_latest_year(
 
     d_aau = df_sim.loc[row_idx, "D_AAU"]
 
-    df_sim.loc[row_idx, "alpha"] = 1.0
+    df_sim.loc[row_idx, "alpha"] = 0.375
 
     alpha_mask = (
         (d_aau > 0)
@@ -164,8 +167,8 @@ def simulate_osu_latest_year(
     affected_alpha_idx = row_idx[alpha_mask.to_numpy()]
 
     df_sim.loc[affected_alpha_idx, "alpha"] = (
-        3
-        - 2
+        0.75
+        - 0.375
         * (
             df_sim.loc[affected_alpha_idx, "D"]
             / df_sim.loc[affected_alpha_idx, "D_AAU"]
@@ -175,7 +178,7 @@ def simulate_osu_latest_year(
     df_sim.loc[row_idx, "alpha"] = (
         df_sim.loc[row_idx, "alpha"]
         .replace([np.inf, -np.inf], np.nan)
-        .fillna(1.0)
+        .fillna(0.375)
         .round(3)
     )
 
@@ -194,7 +197,7 @@ def simulate_osu_latest_year(
         + df_sim.loc[row_idx, "Senior Part Time Sum"]
     )
 
-    # S view: junior/senior only
+    # STAR view: junior/senior only
     df_sim.loc[row_idx, "UG_FT_S"] = (
         df_sim.loc[row_idx, "Junior Full Time Sum"]
         + df_sim.loc[row_idx, "Senior Full Time Sum"]
@@ -247,31 +250,34 @@ def simulate_osu_latest_year(
         .astype("Int64")
     )
 
-    # S recalculation
-    df_sim.loc[row_idx, "SCH"] = (
+    # STAR recalculation
+    df_sim.loc[row_idx, "STAR_num"] = (
         df_sim.loc[row_idx, "UG_FT_S"] * 40
-        + df_sim.loc[row_idx, "UG_PT_S"] * 29
-        + df_sim.loc[row_idx, "MS_FT"] * 31
-        + df_sim.loc[row_idx, "MS_PT"] * 25
+        + df_sim.loc[row_idx, "UG_PT_S"] * 20
+        + df_sim.loc[row_idx, "MS_FT"] * 32
+        + df_sim.loc[row_idx, "MS_PT"] * 21
     )
+    df_sim.loc[row_idx, "SCH"] = df_sim.loc[row_idx, "STAR_num"]
 
-    df_sim.loc[row_idx, "S_den"] = (
+    df_sim.loc[row_idx, "STAR_den"] = (
         df_sim.loc[row_idx, "alpha"] * df_sim.loc[row_idx, "TTT"]
-        + 3 * df_sim.loc[row_idx, "NTT"]
+        + 0.9 * df_sim.loc[row_idx, "NTT"]
     )
 
-    df_sim.loc[row_idx, "S"] = np.where(
-        df_sim.loc[row_idx, "S_den"] > 0,
-        df_sim.loc[row_idx, "SCH"] / df_sim.loc[row_idx, "S_den"],
+    df_sim.loc[row_idx, "STAR"] = np.where(
+        df_sim.loc[row_idx, "STAR_den"] > 0,
+        df_sim.loc[row_idx, "STAR_num"] / df_sim.loc[row_idx, "STAR_den"],
         np.nan
     )
 
-    df_sim.loc[row_idx, "S"] = (
-        df_sim.loc[row_idx, "S"]
+    df_sim.loc[row_idx, "STAR"] = (
+        df_sim.loc[row_idx, "STAR"]
         .replace([np.inf, -np.inf], np.nan)
         .fillna(0)
         .round(3)
     )
+    df_sim.loc[row_idx, "S_den"] = df_sim.loc[row_idx, "STAR_den"]
+    df_sim.loc[row_idx, "S"] = df_sim.loc[row_idx, "STAR"]
 
     # Backward-compatible aliases
     df_sim.loc[row_idx, "Rs_den"] = df_sim.loc[row_idx, "S_den"]
@@ -329,15 +335,21 @@ def plot_simulation(
     # ------------------------------------------------------------------
     # Compatibility with old/new column names
     # ------------------------------------------------------------------
-    s_col = "S" if "S" in df_disc_base.columns else "Rs_SCH"
-    s_benchmark_col = "S_AAU" if "S_AAU" in df_disc_base.columns else "Rs_AAU_SCH"
+    star_col = "STAR" if "STAR" in df_disc_base.columns else "S" if "S" in df_disc_base.columns else "Rs_SCH"
+    star_benchmark_col = (
+        "STAR_AAU"
+        if "STAR_AAU" in df_disc_base.columns
+        else "S_AAU"
+        if "S_AAU" in df_disc_base.columns
+        else "Rs_AAU_SCH"
+    )
 
     r_col = "R_raw" if "R_raw" in df_disc_base.columns else "R_s"
     r_benchmark_col = "R_AAU" if "R_AAU" in df_disc_base.columns else None
 
     required_cols = [
-        s_col,
-        s_benchmark_col,
+        star_col,
+        star_benchmark_col,
         r_col,
         "D",
         "D_AAU"
@@ -352,11 +364,11 @@ def plot_simulation(
                 frame[c] = pd.to_numeric(frame[c], errors="coerce")
                 frame[c] = frame[c].replace([np.inf, -np.inf], np.nan)
 
-    df_disc_base = df_disc_base.dropna(subset=[s_col, r_col, "D"])
-    df_disc_sim = df_disc_sim.dropna(subset=[s_col, r_col, "D"])
+    df_disc_base = df_disc_base.dropna(subset=[star_col, r_col, "D"])
+    df_disc_sim = df_disc_sim.dropna(subset=[star_col, r_col, "D"])
 
     if not df_peer.empty:
-        df_peer = df_peer.dropna(subset=[s_col, r_col, "D"])
+        df_peer = df_peer.dropna(subset=[star_col, r_col, "D"])
 
     if df_disc_base.empty:
         raise ValueError(f"No valid OSU rows found for {disc} after cleaning.")
@@ -373,7 +385,7 @@ def plot_simulation(
             if sub.empty:
                 continue
 
-            S_yr = float(sub[s_col].median())
+            STAR_yr = float(sub[star_col].median())
             R_yr = float(sub[r_col].median())
             D_yr = float(sub["D"].median())
 
@@ -384,11 +396,11 @@ def plot_simulation(
                 else float(sub["D"].median())
             )
 
-            S_AAU_vals = sub[s_benchmark_col].dropna().unique()
-            S_AAU_yr = (
-                float(S_AAU_vals[0])
-                if len(S_AAU_vals)
-                else float(sub[s_col].median())
+            STAR_AAU_vals = sub[star_benchmark_col].dropna().unique()
+            STAR_AAU_yr = (
+                float(STAR_AAU_vals[0])
+                if len(STAR_AAU_vals)
+                else float(sub[star_col].median())
             )
 
             if r_benchmark_col is not None and r_benchmark_col in sub.columns:
@@ -403,11 +415,13 @@ def plot_simulation(
 
             rows.append({
                 "Year": yr,
-                "S": S_yr,
+                "STAR": STAR_yr,
+                "S": STAR_yr,
                 "R": R_yr,
                 "D": D_yr,
                 "D_AAU": D_AAU_yr,
-                "S_AAU": S_AAU_yr,
+                "STAR_AAU": STAR_AAU_yr,
+                "S_AAU": STAR_AAU_yr,
                 "R_AAU": R_AAU_yr
             })
 
@@ -799,16 +813,16 @@ def plot_simulation(
         peer_x_col=r_col
     )
 
-    # Right panel: S vs D
+    # Right panel: STAR vs D
     draw_panel(
         ax=axes[1],
-        x_col="S",
-        x_benchmark_col="S_AAU",
-        x_label="SCH to Teaching Capacity Ratio (S)",
-        x_benchmark_label="S_AAU",
+        x_col="STAR",
+        x_benchmark_col="STAR_AAU",
+        x_label="SCH to Teaching Assignment Ratio (STAR)",
+        x_benchmark_label="STAR_AAU",
         benchmark_color=r_color,
-        panel_title="S to D",
-        peer_x_col=s_col
+        panel_title="STAR to D",
+        peer_x_col=star_col
     )
 
     axes[0].set_ylabel("Full-Time Doctoral Student to TTT Faculty Ratio (D)")

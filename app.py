@@ -1,5 +1,7 @@
 import streamlit as st
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from pathlib import Path
 from simulator_engine import simulate_osu_latest_year, plot_simulation
@@ -253,9 +255,9 @@ m2.metric(
 )
 
 m3.metric(
-    "S",
-    f"{sim_row['S']:.2f}",
-    delta=f"{sim_row['S'] - base_row['S']:.2f}"
+    "STAR",
+    f"{sim_row['STAR']:.2f}",
+    delta=f"{sim_row['STAR'] - base_row['STAR']:.2f}"
 )
 
 m4.metric(
@@ -298,7 +300,9 @@ comparison_cols = [
     "D",
     "alpha",
     "R_raw",
-    "S",
+    "STAR_num",
+    "STAR_den",
+    "STAR",
 ]
 
 comparison = pd.DataFrame({
@@ -309,8 +313,7 @@ comparison = pd.DataFrame({
 
 comparison["Change"] = comparison["Simulated"] - comparison["Baseline"]
 
-st.dataframe(
-    comparison,
-    use_container_width=True,
-    hide_index=True
+st.markdown(
+    comparison.to_html(index=False),
+    unsafe_allow_html=True
 )

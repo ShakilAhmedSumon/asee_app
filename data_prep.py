@@ -66,15 +66,15 @@ def prepapre_data(df, ug_ft, phd_ft, ttt):
 
     # ------------------------------------------------------------------
     # 4. Compute alpha
-    # alpha = 1.0 if D >= D_AAU
-    # alpha = 3 - 2 * D / D_AAU if D < D_AAU
+    # alpha = 0.375 if D >= D_AAU
+    # alpha = 0.75 - 0.375 * D / D_AAU if D < D_AAU
     # ------------------------------------------------------------------
     mask = (df["D_AAU"] > 0) & (df["D"] < df["D_AAU"])
 
-    df["alpha"] = 1.0
-    df.loc[mask, "alpha"] = 3 - 2 * (df.loc[mask, "D"] / df.loc[mask, "D_AAU"])
+    df["alpha"] = 0.375
+    df.loc[mask, "alpha"] = 0.75 - 0.375 * (df.loc[mask, "D"] / df.loc[mask, "D_AAU"])
 
-    df["alpha"] = df["alpha"].replace([np.inf, -np.inf], np.nan).fillna(1.0)
+    df["alpha"] = df["alpha"].replace([np.inf, -np.inf], np.nan).fillna(0.375)
     df["alpha"] = df["alpha"].round(3)
 
     # ------------------------------------------------------------------
@@ -111,8 +111,7 @@ def prepapre_data(df, ug_ft, phd_ft, ttt):
     # R = traditional student-to-faculty view.
     #     Includes 1st-, 2nd-, 3rd-, and 4th-year undergraduates.
     #
-    # S = SCH-to-teaching-capacity view.
-    #     Keeps the bells and whistles.
+    # STAR = SCH-to-teaching-assignment view.
     #     Excludes 1st- and 2nd-year undergraduates.
     # ------------------------------------------------------------------
 
@@ -131,7 +130,7 @@ def prepapre_data(df, ug_ft, phd_ft, ttt):
         + df["Senior Part Time Sum"]
     )
 
-    # For S: exclude 1st- and 2nd-year undergraduates
+    # For STAR: exclude 1st- and 2nd-year undergraduates
     df["UG_FT_S"] = (
         df["Junior Full Time Sum"]
         + df["Senior Full Time Sum"]
@@ -183,32 +182,35 @@ def prepapre_data(df, ug_ft, phd_ft, ttt):
     df["R_raw_int"] = df["R_raw"].round().astype("Int64")
 
     # ------------------------------------------------------------------
-    # 9. SCH numerator for S
+    # 9. SCH numerator for STAR
     #
-    # S numerator = 40UG_FT_S + 29UG_PT_S + 31MS_FT + 25MS_PT
+    # STAR numerator = 40UG_FT_S + 20UG_PT_S + 32MS_FT + 21MS_PT
     # ------------------------------------------------------------------
-    df["SCH"] = (
+    df["STAR_num"] = (
         df["UG_FT_S"] * 40
-        + df["UG_PT_S"] * 29
-        + df["MS_FT"] * 31
-        + df["MS_PT"] * 25
+        + df["UG_PT_S"] * 20
+        + df["MS_FT"] * 32
+        + df["MS_PT"] * 21
     )
+    df["SCH"] = df["STAR_num"]
 
     # ------------------------------------------------------------------
-    # 10. Teaching capacity denominator for S
+    # 10. Teaching assignment denominator for STAR
     #
-    # S denominator = alpha * TTT + 3NTT
+    # STAR denominator = alpha * TTT + 0.9NTT
     # ------------------------------------------------------------------
-    df["S_den"] = (df["alpha"] * df["TTT"]) + (3 * df["NTT"])
+    df["STAR_den"] = (df["alpha"] * df["TTT"]) + (0.9 * df["NTT"])
 
-    df["S"] = np.where(
-        df["S_den"] == 0,
+    df["STAR"] = np.where(
+        df["STAR_den"] == 0,
         np.nan,
-        df["SCH"] / df["S_den"]
+        df["STAR_num"] / df["STAR_den"]
     )
 
-    df["S"] = df["S"].replace([np.inf, -np.inf], np.nan)
-    df["S"] = df["S"].fillna(0).round(3)
+    df["STAR"] = df["STAR"].replace([np.inf, -np.inf], np.nan)
+    df["STAR"] = df["STAR"].fillna(0).round(3)
+    df["S_den"] = df["STAR_den"]
+    df["S"] = df["STAR"]
 
     # ------------------------------------------------------------------
     # 11. Backward-compatible aliases
@@ -222,7 +224,7 @@ def prepapre_data(df, ug_ft, phd_ft, ttt):
     df["R_s_int"] = df["R_raw_int"]
 
     # These aliases keep old filters from breaking, but they now refer to
-    # the S-definition undergraduate counts.
+    # the STAR-definition undergraduate counts.
     df["UG_FT"] = df["UG_FT_S"]
     df["UG_PT"] = df["UG_PT_S"]
 
@@ -242,21 +244,22 @@ def prepapre_data(df, ug_ft, phd_ft, ttt):
     )
 
     # ------------------------------------------------------------------
-    # 13. Year-aware benchmark for S
+    # 13. Year-aware benchmark for STAR
     # ------------------------------------------------------------------
-    s_aau = (
-        df.groupby(["Discipline Name", "Year"], as_index=False)["S"]
+    star_aau = (
+        df.groupby(["Discipline Name", "Year"], as_index=False)["STAR"]
           .median()
-          .rename(columns={"S": "S_AAU"})
+          .rename(columns={"STAR": "STAR_AAU"})
     )
 
     df = df.merge(
-        s_aau,
+        star_aau,
         on=["Discipline Name", "Year"],
         how="left"
     )
 
     # Backward-compatible benchmark alias
+    df["S_AAU"] = df["STAR_AAU"]
     df["Rs_AAU_SCH"] = df["S_AAU"]
 
     # ------------------------------------------------------------------

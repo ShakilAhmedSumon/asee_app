@@ -1,0 +1,8 @@
+#!/bin/sh
+'''exec' "/Users/shakil/Library/CloudStorage/Box-Box/CoE_Projects/Enrollment-SCH vs Faculty Load/Data Versioning/faculty_scenario_app/venv/bin/python" "$0" "$@"
+' '''
+import sys
+from numpy._configtool import main
+if __name__ == '__main__':
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
+    sys.exit(main())
