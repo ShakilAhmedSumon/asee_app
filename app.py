@@ -9,6 +9,44 @@ from simulator_engine import simulate_osu_latest_year, plot_simulation
 from data_prep import prepapre_data
 
 
+def add_peer_short_names(df, short_names_path):
+    short_names = pd.read_excel(short_names_path)
+    short_names = short_names[["Short Name", "University", "IPEDS"]].copy()
+
+    df = df.copy()
+
+    df["IPEDS Unit ID"] = df["IPEDS Unit ID"].astype(str).str.strip()
+    short_names["IPEDS"] = short_names["IPEDS"].astype(str).str.strip()
+
+    df = df.merge(
+        short_names[["IPEDS", "Short Name"]],
+        left_on="IPEDS Unit ID",
+        right_on="IPEDS",
+        how="left"
+    )
+
+    missing_short_name = df["Short Name"].isna()
+
+    if missing_short_name.any():
+        short_names_by_school = short_names.rename(
+            columns={"University": "School Name", "Short Name": "Short Name by School"}
+        )
+
+        df = df.merge(
+            short_names_by_school[["School Name", "Short Name by School"]],
+            on="School Name",
+            how="left"
+        )
+
+        df["Short Name"] = df["Short Name"].fillna(df["Short Name by School"])
+        df = df.drop(columns=["Short Name by School"])
+
+    df["Peer Short Name"] = df["Short Name"]
+    df = df.drop(columns=["IPEDS", "Short Name"])
+
+    return df
+
+
 st.set_page_config(
     page_title="OSU ASEE Scenario Simulator",
     layout="wide"
@@ -23,6 +61,7 @@ st.markdown(
 )
 
 raw_data_path = 'data/raw_data_v3.xlsx'
+short_names_path = 'data/AAU Publics 1.xlsx'
 
 # -------------------------------------------------------------------
 # Read data directly from local folder
@@ -65,6 +104,8 @@ df_prepared = prepapre_data(
     phd_ft=phd_ft_threshold,
     ttt=ttt_threshold
 )
+
+df_prepared = add_peer_short_names(df_prepared, short_names_path)
 
 df_osu_base = df_prepared[
     df_prepared["School Name"] == "Oregon State University"

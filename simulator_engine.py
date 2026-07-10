@@ -531,6 +531,32 @@ def plot_simulation(
                 zorder=2
             )
 
+            if "Peer Short Name" in df_peer.columns:
+                peer_labels = df_peer.dropna(subset=["Peer Short Name"])
+
+                for i, (_, r) in enumerate(peer_labels.iterrows()):
+                    label = str(r["Peer Short Name"]).strip()
+
+                    if not label:
+                        continue
+
+                    x_offset = 4 if i % 2 == 0 else -4
+                    ha = "left" if x_offset > 0 else "right"
+
+                    ax.annotate(
+                        label,
+                        xy=(r[peer_x_col], r["D"]),
+                        xytext=(x_offset, 3),
+                        textcoords="offset points",
+                        ha=ha,
+                        va="bottom",
+                        fontsize=7,
+                        color="#4a4a4a",
+                        alpha=0.85,
+                        clip_on=True,
+                        zorder=4
+                    )
+
         # Baseline OSU points
         for _, r in plot_df.iterrows():
             yr = int(r["Year"])
@@ -689,19 +715,6 @@ def plot_simulation(
             zorder=0
         )
 
-        ax.text(
-            ax.get_xlim()[1] * 0.5,
-            D_intervention_present * 0.5,
-            "Intervention Zone",
-            ha="center",
-            va="center",
-            fontsize=12,
-            color=intervention_color,
-            alpha=0.75,
-            fontweight="bold",
-            clip_on=True
-        )
-
         # Zone labels
         y_axis_max = ax.get_ylim()[1]
 
@@ -825,7 +838,7 @@ def plot_simulation(
         markeredgecolor="none",
         color="gray",
         alpha=0.35,
-        label=f"Peer schools {latest_peer_year}"
+        label=f"Peer institutions {latest_peer_year}"
     )
 
     sim_handle = plt.Line2D(
