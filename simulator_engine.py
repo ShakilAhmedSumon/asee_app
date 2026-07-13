@@ -503,11 +503,23 @@ def plot_simulation(
         x_benchmark_label,
         benchmark_color,
         panel_title,
-        peer_x_col
+        peer_x_col,
+        latest_x_benchmark,
+        latest_d_benchmark
     ):
-        x_min = float(plot_df[x_benchmark_col].min())
-        x_max_benchmark = float(plot_df[x_benchmark_col].max())
-        x_75 = float(np.nanpercentile(plot_df[x_benchmark_col], 75))
+        if not df_peer.empty and df_peer[peer_x_col].notna().any():
+            x_q25 = float(np.nanpercentile(df_peer[peer_x_col], 25))
+            x_q75 = float(np.nanpercentile(df_peer[peer_x_col], 75))
+        else:
+            x_q25 = float(np.nanpercentile(plot_df[x_col], 25))
+            x_q75 = float(np.nanpercentile(plot_df[x_col], 75))
+
+        if not df_peer.empty and df_peer["D"].notna().any():
+            D_q25 = float(np.nanpercentile(df_peer["D"], 25))
+            D_q75 = float(np.nanpercentile(df_peer["D"], 75))
+        else:
+            D_q25 = float(np.nanpercentile(plot_df["D"], 25))
+            D_q75 = float(np.nanpercentile(plot_df["D"], 75))
 
         if not df_peer.empty:
             peer_x_max = df_peer[peer_x_col].max()
@@ -526,8 +538,7 @@ def plot_simulation(
         x_data_max = max(
             plot_df[x_col].max(),
             peer_x_max,
-            x_max_benchmark,
-            x_75,
+            x_q75,
             sim_x_max
         )
 
@@ -640,6 +651,36 @@ def plot_simulation(
                 zorder=11
             )
 
+        # Highlight the 2024 OSU STAR point with an overlay only on the STAR panel.
+        if x_col == "STAR" and not baseline_latest.empty:
+            x_star = float(baseline_latest[x_col])
+            y_star = float(baseline_latest["D"])
+
+            ax.scatter(
+                x_star,
+                y_star,
+                s=340,
+                facecolor="none",
+                edgecolor="#d62728",
+                linewidth=2,
+                alpha=0.75,
+                zorder=9
+            )
+
+            coord_label = f"({x_star:.0f}, {y_star:.1f})"
+            ax.annotate(
+                coord_label,
+                xy=(x_star, y_star),
+                xytext=(18, -20),
+                textcoords="offset points",
+                fontsize=10,
+                fontweight="bold",
+                color="#732020",
+                bbox=dict(boxstyle="round,pad=0.35", fc="#feeceb", ec="#732020", alpha=0.95),
+                arrowprops=dict(arrowstyle="->", color="#732020", lw=1.3),
+                zorder=12
+            )
+
         # Axis limits
         ax.set_xlim(0, x_axis_max)
 
@@ -664,18 +705,18 @@ def plot_simulation(
 
         ax.yaxis.set_major_locator(MultipleLocator(1))
 
-        # Benchmark bands
+        # Benchmark quartile ranges
         ax.axvspan(
-            x_min,
-            x_max_benchmark,
+            x_q25,
+            x_q75,
             facecolor="green",
             alpha=0.15,
             zorder=1
         )
 
         ax.axhspan(
-            D_min,
-            D_max,
+            D_q25,
+            D_q75,
             facecolor=d_band_color,
             alpha=0.35,
             zorder=1
@@ -683,7 +724,7 @@ def plot_simulation(
 
         # Benchmark lines
         ax.axvline(
-            x_75,
+            latest_x_benchmark,
             linestyle="-",
             linewidth=2.2,
             color=benchmark_color,
@@ -692,7 +733,7 @@ def plot_simulation(
         )
 
         ax.axhline(
-            D_latest,
+            latest_d_benchmark,
             linestyle="-",
             linewidth=2.2,
             color=d_color,
@@ -733,7 +774,7 @@ def plot_simulation(
         y_axis_max = ax.get_ylim()[1]
 
         ax.text(
-            x_max_benchmark + 0.5 * max(x_axis_max - x_max_benchmark, 0.1),
+            x_q75 + 0.5 * max(x_axis_max - x_q75, 0.1),
             D_max + 0.5 * max(y_axis_max - D_max, 0.2),
             "Zone I",
             fontsize=12,
@@ -743,7 +784,7 @@ def plot_simulation(
         )
 
         ax.text(
-            0.5 * x_max_benchmark,
+            0.5 * x_q25,
             D_max + 0.5 * max(y_axis_max - D_max, 0.2),
             "Zone II",
             fontsize=12,
@@ -753,7 +794,7 @@ def plot_simulation(
         )
 
         ax.text(
-            0.5 * x_max_benchmark,
+            0.5 * x_q25,
             D_intervention_present + 0.5 * max(D_max - D_intervention_present, 0.2),
             "Zone III",
             fontsize=12,
@@ -763,7 +804,7 @@ def plot_simulation(
         )
 
         ax.text(
-            x_max_benchmark + 0.5 * max(x_axis_max - x_max_benchmark, 0.1),
+            x_q75 + 0.5 * max(x_axis_max - x_q75, 0.1),
             D_intervention_present + 0.5 * max(D_max - D_intervention_present, 0.2),
             "Zone IV",
             fontsize=12,
@@ -773,29 +814,88 @@ def plot_simulation(
         )
 
         # Benchmark annotations
+        x_axis_end = ax.get_xlim()[1]
+        y_axis_top = ax.get_ylim()[1]
+
         ax.annotate(
-            x_benchmark_label,
-            xy=(x_75, ax.get_ylim()[1]),
-            xytext=(-12, -5),
+            f"Q1 = {x_q25:.0f}",
+            xy=(x_q25, y_axis_top),
+            xytext=(-12, -12),
             textcoords="offset points",
             ha="right",
             va="top",
             rotation=90,
-            fontsize=8,
+            fontsize=9,
             color=benchmark_color,
-            fontweight="bold"
+            fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8)
         )
 
         ax.annotate(
-            "D_AAU",
-            xy=(ax.get_xlim()[1], D_latest),
-            xytext=(-80, -15),
+            f"Q2 = {latest_x_benchmark:.0f}",
+            xy=(latest_x_benchmark, y_axis_top),
+            xytext=(6, -12),
             textcoords="offset points",
             ha="left",
+            va="top",
+            rotation=90,
+            fontsize=9,
+            color=benchmark_color,
+            fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8)
+        )
+
+        ax.annotate(
+            f"Q3 = {x_q75:.0f}",
+            xy=(x_q75, y_axis_top),
+            xytext=(10, -12),
+            textcoords="offset points",
+            ha="left",
+            va="top",
+            rotation=90,
+            fontsize=9,
+            color=benchmark_color,
+            fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8)
+        )
+
+        ax.annotate(
+            f"Q1 = {D_q25:.1f}",
+            xy=(x_axis_end, D_q25),
+            xytext=(-10, 6),
+            textcoords="offset points",
+            ha="right",
             va="bottom",
-            fontsize=8,
+            fontsize=9,
             color=d_color,
-            fontweight="bold"
+            fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8)
+        )
+
+        ax.annotate(
+            f"Q2 = {latest_d_benchmark:.1f}",
+            xy=(x_axis_end, latest_d_benchmark),
+            xytext=(-10, 0),
+            textcoords="offset points",
+            ha="right",
+            va="center",
+            fontsize=9,
+            color=d_color,
+            fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8)
+        )
+
+        ax.annotate(
+            f"Q3 = {D_q75:.1f}",
+            xy=(x_axis_end, D_q75),
+            xytext=(-10, -6),
+            textcoords="offset points",
+            ha="right",
+            va="top",
+            fontsize=9,
+            color=d_color,
+            fontweight="bold",
+            bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8)
         )
 
         ax.set_xlabel(x_label)
@@ -810,7 +910,9 @@ def plot_simulation(
         x_benchmark_label="R_AAU",
         benchmark_color=r_color,
         panel_title="R to D",
-        peer_x_col=r_col
+        peer_x_col=r_col,
+        latest_x_benchmark=float(latest_row["R_AAU"]),
+        latest_d_benchmark=float(latest_row["D_AAU"])
     )
 
     # Right panel: STAR vs D
@@ -822,7 +924,9 @@ def plot_simulation(
         x_benchmark_label="STAR_AAU",
         benchmark_color=r_color,
         panel_title="STAR to D",
-        peer_x_col=star_col
+        peer_x_col=star_col,
+        latest_x_benchmark=float(latest_row[star_benchmark_col]),
+        latest_d_benchmark=float(latest_row["D_AAU"])
     )
 
     axes[0].set_ylabel("Full-Time Doctoral Student to TTT Faculty Ratio (D)")
