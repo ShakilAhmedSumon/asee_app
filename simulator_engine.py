@@ -30,7 +30,7 @@ def simulate_osu_latest_year(
     latest_year=2024,
     delta_ttt=0,
     delta_ntt=0,
-    delta_phd_ft=0,
+    delta_d=0.0,
     delta_freshman_ft=0,
     delta_sophomore_ft=0,
     delta_junior_ft=0,
@@ -49,6 +49,8 @@ def simulate_osu_latest_year(
     - Peer schools are unchanged.
     - AAU benchmarks are unchanged.
     - Only OSU's latest-year R, STAR, D, and related fields are recalculated.
+    - TTT faculty changes preserve the program's D ratio by assigning the
+      program-average doctoral mentoring load to the changed faculty count.
     """
 
     df_sim = df_prepared.copy()
@@ -86,6 +88,7 @@ def simulate_osu_latest_year(
         "Masters Full Time Sum",
         "Masters Part Time Sum",
         "D_AAU",
+        "alpha",
         "STAR_AAU",
         "S_AAU",
         "R_AAU",
@@ -97,8 +100,20 @@ def simulate_osu_latest_year(
     # ------------------------------------------------------------
     # Apply scenario changes
     # ------------------------------------------------------------
-    df_sim.loc[row_idx, "Doctoral Full Time Sum"] += delta_phd_ft
+    baseline_d = pd.to_numeric(
+        df_sim.loc[row_idx, "D"], errors="coerce"
+    ).fillna(0.0)
+    baseline_alpha = df_sim.loc[row_idx, "alpha"].copy()
+    target_d = (baseline_d + float(delta_d)).clip(lower=0.0)
+
     df_sim.loc[row_idx, "Total Tenured/Tenure-Track Faculty"] += delta_ttt
+
+    # Keep D independent of faculty changes. New TTT faculty are assumed to
+    # mentor the degree program's average number of full-time doctoral students.
+    df_sim.loc[row_idx, "Doctoral Full Time Sum"] = (
+        target_d
+        * df_sim.loc[row_idx, "Total Tenured/Tenure-Track Faculty"].clip(lower=0)
+    )
 
     # Treat NTT increase as full-time NTT by default
     df_sim.loc[row_idx, "Full Time Teaching Faculty (Non-Tenure)"] += delta_ntt
@@ -140,14 +155,9 @@ def simulate_osu_latest_year(
     # ------------------------------------------------------------
     # Recalculate OSU latest-year row only
     # ------------------------------------------------------------
-    ttt = df_sim.loc[row_idx, "Total Tenured/Tenure-Track Faculty"]
-    phd_ft = df_sim.loc[row_idx, "Doctoral Full Time Sum"]
-
-    df_sim.loc[row_idx, "D"] = np.where(
-        ttt > 0,
-        phd_ft / ttt,
-        np.nan
-    )
+    # Preserve the requested D even if TTT is reduced to zero. This keeps the
+    # scenario control authoritative and avoids a faculty-only alpha change.
+    df_sim.loc[row_idx, "D"] = target_d.to_numpy()
 
     df_sim.loc[row_idx, "D_int"] = (
         df_sim.loc[row_idx, "D"]
@@ -157,23 +167,27 @@ def simulate_osu_latest_year(
 
     d_aau = df_sim.loc[row_idx, "D_AAU"]
 
-    df_sim.loc[row_idx, "alpha"] = 0.375
+    if np.isclose(float(delta_d), 0.0):
+        # A faculty-only scenario must leave alpha exactly as prepared.
+        df_sim.loc[row_idx, "alpha"] = baseline_alpha.to_numpy()
+    else:
+        df_sim.loc[row_idx, "alpha"] = 0.375
 
-    alpha_mask = (
-        (d_aau > 0)
-        & (df_sim.loc[row_idx, "D"] < d_aau)
-    )
-
-    affected_alpha_idx = row_idx[alpha_mask.to_numpy()]
-
-    df_sim.loc[affected_alpha_idx, "alpha"] = (
-        0.75
-        - 0.375
-        * (
-            df_sim.loc[affected_alpha_idx, "D"]
-            / df_sim.loc[affected_alpha_idx, "D_AAU"]
+        alpha_mask = (
+            (d_aau > 0)
+            & (df_sim.loc[row_idx, "D"] < d_aau)
         )
-    )
+
+        affected_alpha_idx = row_idx[alpha_mask.to_numpy()]
+
+        df_sim.loc[affected_alpha_idx, "alpha"] = (
+            0.75
+            - 0.375
+            * (
+                df_sim.loc[affected_alpha_idx, "D"]
+                / df_sim.loc[affected_alpha_idx, "D_AAU"]
+            )
+        )
 
     df_sim.loc[row_idx, "alpha"] = (
         df_sim.loc[row_idx, "alpha"]
@@ -549,7 +563,7 @@ def plot_simulation(
             ax.scatter(
                 df_peer[peer_x_col],
                 df_peer["D"],
-                s=45,
+                s=60,
                 color="gray",
                 alpha=0.22,
                 edgecolor="none",
@@ -641,7 +655,7 @@ def plot_simulation(
             )
 
             ax.annotate(
-                "Simulated 2024",
+                f"Modified {latest_year}",
                 xy=(x1, y1),
                 xytext=(10, 10),
                 textcoords="offset points",
@@ -898,7 +912,8 @@ def plot_simulation(
             bbox=dict(boxstyle="round,pad=0.2", fc="white", ec="none", alpha=0.8)
         )
 
-        ax.set_xlabel(x_label)
+        ax.set_xlabel(x_label, fontsize=13)
+        ax.tick_params(axis="both", labelsize=11)
         ax.set_title(panel_title, fontsize=13, fontweight="bold")
 
     # Left panel: R vs D
@@ -929,7 +944,10 @@ def plot_simulation(
         latest_d_benchmark=float(latest_row["D_AAU"])
     )
 
-    axes[0].set_ylabel("Full-Time Doctoral Student to TTT Faculty Ratio (D)")
+    axes[0].set_ylabel(
+        "Full-Time Doctoral Student to TTT Faculty Ratio (D)",
+        fontsize=13,
+    )
 
     # Legend
     year_handles = [
@@ -952,7 +970,7 @@ def plot_simulation(
         [0],
         marker="o",
         linestyle="",
-        markersize=7,
+        markersize=8,
         markeredgecolor="none",
         color="gray",
         alpha=0.35,
@@ -969,7 +987,7 @@ def plot_simulation(
         markeredgecolor="black",
         color="black",
         linewidth=2,
-        label="Simulated OSU 2024"
+        label=f"Modified OSU {latest_year}"
     )
 
     year_handles.append(peer_handle)
@@ -982,7 +1000,8 @@ def plot_simulation(
         loc="upper center",
         bbox_to_anchor=(0.5, 0.98),
         ncol=min(len(year_handles), 7),
-        frameon=False
+        frameon=False,
+        fontsize=11,
     )
 
     fig.suptitle(

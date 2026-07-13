@@ -154,12 +154,17 @@ delta_ntt = st.sidebar.number_input(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Doctoral student changes")
+st.sidebar.subheader("Doctoral ratio change")
 
-delta_phd_ft = st.sidebar.number_input(
-    "Change in full-time PhD students",
-    value=0,
-    step=1
+delta_d = st.sidebar.number_input(
+    "Increase in D (FT PhD / TTT)",
+    value=0.0,
+    step=0.1,
+    format="%.2f",
+    help=(
+        "Changes the full-time doctoral-student-to-TTT-faculty ratio directly. "
+        "Changing TTT faculty alone keeps D and alpha fixed."
+    ),
 )
 
 st.sidebar.markdown("---")
@@ -201,7 +206,7 @@ df_simulated = simulate_osu_latest_year(
     latest_year=latest_year,
     delta_ttt=delta_ttt,
     delta_ntt=delta_ntt,
-    delta_phd_ft=delta_phd_ft,
+    delta_d=delta_d,
     delta_freshman_ft=delta_freshman_ft,
     delta_sophomore_ft=delta_sophomore_ft,
     delta_junior_ft=delta_junior_ft,
@@ -232,11 +237,73 @@ sim_row = df_osu_sim[
 ].copy()
 
 if base_row.empty or sim_row.empty:
-    st.error("Could not find baseline or simulated OSU row.")
+    st.error("Could not find baseline or modified OSU row.")
     st.stop()
 
 base_row = base_row.iloc[0]
 sim_row = sim_row.iloc[0]
+
+st.subheader(f"{selected_disc} — Peer Percentiles")
+
+peer_rows = df_other[
+    (df_other["Discipline Name"] == selected_disc)
+    & (df_other["Year"] == latest_year)
+].copy()
+
+peer_metric_cols = {
+    "D": ("D", "D_AAU"),
+    "R": ("R_raw", "R_AAU"),
+    "S": (
+        "STAR" if "STAR" in peer_rows.columns else "S",
+        "STAR_AAU" if "STAR_AAU" in df_osu_base.columns else "S_AAU",
+    ),
+}
+
+# Match plot_simulation exactly: Q1/Q3 come from peers in the selected peer
+# year, while Q2 is the latest OSU-year AAU benchmark displayed by the plot.
+plot_years = [2020, 2021, 2022, 2023, 2024]
+osu_plot_rows = df_osu_base[
+    (df_osu_base["Discipline Name"] == selected_disc)
+    & (df_osu_base["Year"].isin(plot_years))
+].copy()
+plot_benchmark_row = osu_plot_rows.loc[osu_plot_rows["Year"].idxmax()]
+
+
+def plot_quartile(metric_col, percentile):
+    peer_values = pd.to_numeric(peer_rows[metric_col], errors="coerce").dropna()
+
+    if not peer_values.empty:
+        return peer_values.quantile(percentile / 100)
+
+    fallback_values = (
+        osu_plot_rows.groupby("Year")[metric_col]
+        .median()
+        .dropna()
+    )
+    return fallback_values.quantile(percentile / 100)
+
+peer_percentiles = pd.DataFrame(
+    {
+        "Metric": list(peer_metric_cols),
+        "25th percentile": [
+            plot_quartile(metric_col, 25)
+            for metric_col, _ in peer_metric_cols.values()
+        ],
+        "50th percentile": [
+            pd.to_numeric(
+                pd.Series([plot_benchmark_row[benchmark_col]]),
+                errors="coerce",
+            ).iloc[0]
+            for _, benchmark_col in peer_metric_cols.values()
+        ],
+        "75th percentile": [
+            plot_quartile(metric_col, 75)
+            for metric_col, _ in peer_metric_cols.values()
+        ],
+    }
+).round(2)
+
+st.dataframe(peer_percentiles, hide_index=True, use_container_width=True)
 
 st.subheader(f"{selected_disc} — Scenario Summary")
 
@@ -284,34 +351,36 @@ st.pyplot(fig, clear_figure=True)
 # -------------------------------------------------------------------
 # Before/after table
 # -------------------------------------------------------------------
-st.subheader("Baseline vs Simulated OSU Values")
+st.subheader("Baseline vs Modified OSU Values")
 
-comparison_cols = [
-    "Doctoral Full Time Sum",
-    "Total Tenured/Tenure-Track Faculty",
-    "Full Time Teaching Faculty (Non-Tenure)",
-    "FTE of Part Time Teaching Faculty (Non-Tenure)",
-    "Freshman Full Time Sum",
-    "Sophomore Full Time Sum",
-    "Junior Full Time Sum",
-    "Senior Full Time Sum",
-    "Masters Full Time Sum",
-    "Masters Part Time Sum",
-    "D",
-    "alpha",
-    "R_raw",
-    "STAR_num",
-    "STAR_den",
-    "STAR",
+comparison_metrics = [
+    ("TTT Faculty", "Total Tenured/Tenure-Track Faculty"),
+    ("FT NTT Faculty", "Full Time Teaching Faculty (Non-Tenure)"),
+    ("FTE of PT NTT Faculty", "FTE of Part Time Teaching Faculty (Non-Tenure)"),
+    ("Freshman FT", "Freshman Full Time Sum"),
+    ("Sophomore FT", "Sophomore Full Time Sum"),
+    ("Junior FT", "Junior Full Time Sum"),
+    ("Senior FT", "Senior Full Time Sum"),
+    ("FT Undergrads", "UG_FT_R"),
+    ("FT Undergrads exc. 1st and 2nd year", "UG_FT_S"),
+    ("Master's FT", "Masters Full Time Sum"),
+    ("Master's PT", "Masters Part Time Sum"),
+    ("Doctoral FT", "Doctoral Full Time Sum"),
+    ("D", "D"),
+    ("Alpha", "alpha"),
+    ("R", "R_raw"),
+    ("STAR numerator", "STAR_num"),
+    ("STAR denominator", "STAR_den"),
+    ("S", "STAR"),
 ]
 
 comparison = pd.DataFrame({
-    "Metric": comparison_cols,
-    "Baseline": [base_row.get(c, None) for c in comparison_cols],
-    "Simulated": [sim_row.get(c, None) for c in comparison_cols],
+    "Metric": [label for label, _ in comparison_metrics],
+    "Baseline": [base_row.get(col, None) for _, col in comparison_metrics],
+    "Modified": [sim_row.get(col, None) for _, col in comparison_metrics],
 })
 
-comparison["Change"] = comparison["Simulated"] - comparison["Baseline"]
+comparison["Change"] = comparison["Modified"] - comparison["Baseline"]
 
 st.markdown(
     comparison.to_html(index=False),
