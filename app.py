@@ -11,6 +11,25 @@ from simulator_engine import simulate_osu_latest_year, plot_simulation
 from data_prep import prepapre_data
 
 
+PROGRAM_THRESHOLDS = {
+    # Larger programs
+    "Civil/Environmental Engineering": {"ug_ft": 199, "phd_ft": 9, "ttt": 9},
+    "Computer Science (inside engineering)": {"ug_ft": 199, "phd_ft": 9, "ttt": 9},
+    "Electrical/Computer Engineering": {"ug_ft": 199, "phd_ft": 9, "ttt": 9},
+    "Chemical Engineering": {"ug_ft": 199, "phd_ft": 9, "ttt": 9},
+    "Mechanical Engineering": {"ug_ft": 199, "phd_ft": 9, "ttt": 9},
+    "Biomedical Engineering": {"ug_ft": 199, "phd_ft": 9, "ttt": 9},
+    "Industrial/Manufacturing/Systems Engineering": {"ug_ft": 199, "phd_ft": 9, "ttt": 9},
+
+    # Smaller programs
+    "Nuclear Engineering": {"ug_ft": 49, "phd_ft": 4, "ttt": 4},
+    "Metallurgical and Matrls. Engineering": {"ug_ft": 49, "phd_ft": 4, "ttt": 4},
+    "Biological Engr. and Agricultural Engr.": {"ug_ft": 49, "phd_ft": 4, "ttt": 4},
+}
+
+DEFAULT_PROGRAM_THRESHOLDS = {"ug_ft": 199, "phd_ft": 9, "ttt": 9}
+
+
 def add_peer_short_names(df, short_names_path):
     short_names = pd.read_excel(short_names_path)
     short_names = short_names[["Short Name", "University", "IPEDS"]].copy()
@@ -74,27 +93,81 @@ raw_df = pd.read_excel(raw_data_path)
 # -------------------------------------------------------------------
 # Sidebar controls
 # -------------------------------------------------------------------
+excluded_disciplines = {
+    "Architectural Engineering",
+    "Engineering (General)",
+}
+disciplines = sorted(
+    set(
+        raw_df.loc[
+            raw_df["School Name"] == "Oregon State University",
+            "Discipline Name",
+        ].dropna()
+    )
+    - excluded_disciplines
+)
+
+if not disciplines:
+    st.error("No OSU disciplines found in the source data.")
+    st.stop()
+
+st.sidebar.header("Scenario")
+
+selected_disc = st.sidebar.selectbox(
+    "Select discipline",
+    disciplines,
+)
+
+simulation_years = sorted(
+    pd.to_numeric(
+        raw_df.loc[
+            (raw_df["School Name"] == "Oregon State University")
+            & (raw_df["Discipline Name"] == selected_disc),
+            "Year",
+        ],
+        errors="coerce",
+    ).dropna().astype(int).unique(),
+    reverse=True,
+)
+
+latest_year = int(
+    st.sidebar.selectbox(
+        "Simulation year",
+        simulation_years,
+        index=0,
+        key=f"simulation_year_{selected_disc}",
+    )
+)
+
 st.sidebar.header("Benchmark filtering rules")
+
+threshold_defaults = PROGRAM_THRESHOLDS.get(
+    selected_disc,
+    DEFAULT_PROGRAM_THRESHOLDS,
+)
 
 ug_ft_threshold = st.sidebar.number_input(
     "Minimum UG full-time headcount for peer schools",
     min_value=0,
-    value=199,
-    step=1
+    value=threshold_defaults["ug_ft"],
+    step=1,
+    key=f"ug_ft_threshold_{selected_disc}",
 )
 
 phd_ft_threshold = st.sidebar.number_input(
     "Minimum full-time PhD headcount for peer schools",
     min_value=0,
-    value=10,
-    step=1
+    value=threshold_defaults["phd_ft"],
+    step=1,
+    key=f"phd_ft_threshold_{selected_disc}",
 )
 
 ttt_threshold = st.sidebar.number_input(
     "Minimum TTT faculty for peer schools",
     min_value=0,
-    value=10,
-    step=1
+    value=threshold_defaults["ttt"],
+    step=1,
+    key=f"ttt_threshold_{selected_disc}",
 )
 
 # -------------------------------------------------------------------
@@ -117,26 +190,9 @@ df_other = df_prepared[
     df_prepared["School Name"] != "Oregon State University"
 ].copy()
 
-disciplines = sorted(df_osu_base["Discipline Name"].dropna().unique())
-
-if len(disciplines) == 0:
-    st.error("No OSU disciplines found after preparing the data.")
+if selected_disc not in set(df_osu_base["Discipline Name"].dropna()):
+    st.error(f"No prepared OSU data found for {selected_disc}.")
     st.stop()
-
-st.sidebar.header("Scenario")
-
-selected_disc = st.sidebar.selectbox(
-    "Select discipline",
-    disciplines
-)
-
-latest_year = int(
-    st.sidebar.selectbox(
-        "Simulation year",
-        sorted(df_osu_base["Year"].dropna().unique(), reverse=True),
-        index=0
-    )
-)
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Faculty changes")
