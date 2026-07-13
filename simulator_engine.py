@@ -516,7 +516,6 @@ def plot_simulation(
         x_label,
         x_benchmark_label,
         benchmark_color,
-        panel_title,
         peer_x_col,
         latest_x_benchmark,
         latest_d_benchmark
@@ -914,7 +913,6 @@ def plot_simulation(
 
         ax.set_xlabel(x_label, fontsize=13)
         ax.tick_params(axis="both", labelsize=11)
-        ax.set_title(panel_title, fontsize=13, fontweight="bold")
 
     # Left panel: R vs D
     draw_panel(
@@ -924,7 +922,6 @@ def plot_simulation(
         x_label="Raw Student to Faculty Ratio (R)",
         x_benchmark_label="R_AAU",
         benchmark_color=r_color,
-        panel_title="R to D",
         peer_x_col=r_col,
         latest_x_benchmark=float(latest_row["R_AAU"]),
         latest_d_benchmark=float(latest_row["D_AAU"])
@@ -938,7 +935,6 @@ def plot_simulation(
         x_label="SCH to Teaching Assignment Ratio (STAR)",
         x_benchmark_label="STAR_AAU",
         benchmark_color=r_color,
-        panel_title="STAR to D",
         peer_x_col=star_col,
         latest_x_benchmark=float(latest_row[star_benchmark_col]),
         latest_d_benchmark=float(latest_row["D_AAU"])
