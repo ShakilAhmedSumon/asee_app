@@ -338,6 +338,12 @@ def plot_quartile(metric_col, percentile):
     )
     return fallback_values.quantile(percentile / 100)
 
+
+def format_up_to_four_decimals(value):
+    if pd.isna(value):
+        return ""
+    return f"{float(value):.4f}".rstrip("0").rstrip(".")
+
 peer_percentiles = pd.DataFrame(
     {
         "Metric": list(peer_metric_cols),
@@ -357,9 +363,15 @@ peer_percentiles = pd.DataFrame(
             for metric_col, _ in peer_metric_cols.values()
         ],
     }
-).round(2)
+)
 
-st.dataframe(peer_percentiles, hide_index=True, use_container_width=True)
+peer_percentiles_display = peer_percentiles.copy()
+for column in ["25th percentile", "50th percentile", "75th percentile"]:
+    peer_percentiles_display[column] = peer_percentiles_display[column].map(
+        format_up_to_four_decimals
+    )
+
+st.dataframe(peer_percentiles_display, hide_index=True, use_container_width=True)
 
 st.subheader(f"{selected_disc} — Scenario Summary")
 
@@ -425,9 +437,7 @@ comparison_metrics = [
     ("D", "D"),
     ("Alpha", "alpha"),
     ("R", "R_raw"),
-    ("STAR numerator", "STAR_num"),
-    ("STAR denominator", "STAR_den"),
-    ("S", "STAR"),
+    ("STAR", "STAR"),
 ]
 
 comparison = pd.DataFrame({
@@ -438,7 +448,13 @@ comparison = pd.DataFrame({
 
 comparison["Change"] = comparison["Modified"] - comparison["Baseline"]
 
+comparison_display = comparison.copy()
+for column in ["Baseline", "Modified", "Change"]:
+    comparison_display[column] = comparison_display[column].map(
+        format_up_to_four_decimals
+    )
+
 st.markdown(
-    comparison.to_html(index=False),
+    comparison_display.to_html(index=False),
     unsafe_allow_html=True
 )
