@@ -69,11 +69,11 @@ def add_peer_short_names(df, short_names_path):
 
 
 st.set_page_config(
-    page_title="OSU ASEE Scenario Simulator",
+    page_title="D vs. STAR peer benchmarking",
     layout="wide"
 )
 
-st.title("OSU ASEE Scenario Simulator")
+st.title("D vs. STAR peer benchmarking")
 st.markdown(
     """
     This simulator changes only the latest OSU point for the selected discipline.
@@ -309,7 +309,7 @@ peer_rows = df_other[
 peer_metric_cols = {
     "D": ("D", "D_AAU"),
     "R": ("R_raw", "R_AAU"),
-    "S": (
+    "STAR": (
         "STAR" if "STAR" in peer_rows.columns else "S",
         "STAR_AAU" if "STAR_AAU" in df_osu_base.columns else "S_AAU",
     ),
