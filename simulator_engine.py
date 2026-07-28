@@ -314,10 +314,11 @@ def plot_simulation(
     df_other,
     latest_peer_year=2024,
     latest_year=2024,
+    star_tick_interval=None,
     show_simulation=True
 ):
-    years = [2020, 2021, 2022, 2023, 2024]
-    present_year = 2024
+    years = [2020, 2021, 2022, 2023, 2024, 2025]
+    present_year = latest_year
 
     # ------------------------------------------------------------------
     # Filter OSU baseline rows
@@ -664,10 +665,15 @@ def plot_simulation(
                 zorder=11
             )
 
-        # Highlight the 2024 OSU STAR point with an overlay only on the STAR panel.
+        # Highlight the selected OSU simulation-year STAR point.
         if x_col == "STAR" and not baseline_latest.empty:
-            x_star = float(baseline_latest[x_col])
-            y_star = float(baseline_latest["D"])
+            baseline_highlight = (
+                baseline_latest.iloc[0]
+                if isinstance(baseline_latest, pd.DataFrame)
+                else baseline_latest
+            )
+            x_star = float(baseline_highlight[x_col])
+            y_star = float(baseline_highlight["D"])
 
             ax.scatter(
                 x_star,
@@ -709,7 +715,9 @@ def plot_simulation(
 
         ax.set_ylim(0, y_axis_max)
 
-        if x_axis_max <= 30:
+        if x_col == "STAR" and star_tick_interval is not None:
+            ax.xaxis.set_major_locator(MultipleLocator(star_tick_interval))
+        elif x_axis_max <= 30:
             ax.xaxis.set_major_locator(MultipleLocator(5))
         elif x_axis_max <= 100:
             ax.xaxis.set_major_locator(MultipleLocator(10))
@@ -781,49 +789,6 @@ def plot_simulation(
             linewidth=0.0,
             alpha=0.30,
             zorder=0
-        )
-
-        # Zone labels
-        y_axis_max = ax.get_ylim()[1]
-
-        ax.text(
-            x_q75 + 0.5 * max(x_axis_max - x_q75, 0.1),
-            D_max + 0.5 * max(y_axis_max - D_max, 0.2),
-            "Zone I",
-            fontsize=12,
-            alpha=0.55,
-            ha="center",
-            va="center"
-        )
-
-        ax.text(
-            0.5 * x_q25,
-            D_max + 0.5 * max(y_axis_max - D_max, 0.2),
-            "Zone II",
-            fontsize=12,
-            alpha=0.55,
-            ha="center",
-            va="center"
-        )
-
-        ax.text(
-            0.5 * x_q25,
-            D_intervention_present + 0.5 * max(D_max - D_intervention_present, 0.2),
-            "Zone III",
-            fontsize=12,
-            alpha=0.55,
-            ha="center",
-            va="center"
-        )
-
-        ax.text(
-            x_q75 + 0.5 * max(x_axis_max - x_q75, 0.1),
-            D_intervention_present + 0.5 * max(D_max - D_intervention_present, 0.2),
-            "Zone IV",
-            fontsize=12,
-            alpha=0.55,
-            ha="center",
-            va="center"
         )
 
         # Benchmark annotations

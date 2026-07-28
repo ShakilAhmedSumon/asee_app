@@ -139,6 +139,10 @@ latest_year = int(
     )
 )
 
+# OSU has a 2025 actual row, but peer observations currently end in 2024.
+# Use 2024 for all peer distributions and benchmark bands when simulating 2025.
+peer_benchmark_year = 2024 if latest_year == 2025 else latest_year
+
 st.sidebar.header("Benchmark filtering rules")
 
 threshold_defaults = PROGRAM_THRESHOLDS.get(
@@ -169,6 +173,8 @@ ttt_threshold = st.sidebar.number_input(
     step=1,
     key=f"ttt_threshold_{selected_disc}",
 )
+
+star_tick_interval = 500 if ug_ft_threshold >= 199 else 200
 
 # -------------------------------------------------------------------
 # Prepare baseline data
@@ -303,7 +309,7 @@ st.subheader(f"{selected_disc} — Peer Percentiles")
 
 peer_rows = df_other[
     (df_other["Discipline Name"] == selected_disc)
-    & (df_other["Year"] == latest_year)
+    & (df_other["Year"] == peer_benchmark_year)
 ].copy()
 
 peer_metric_cols = {
@@ -317,12 +323,14 @@ peer_metric_cols = {
 
 # Match plot_simulation exactly: Q1/Q3 come from peers in the selected peer
 # year, while Q2 is the latest OSU-year AAU benchmark displayed by the plot.
-plot_years = [2020, 2021, 2022, 2023, 2024]
+plot_years = [2020, 2021, 2022, 2023, 2024, 2025]
 osu_plot_rows = df_osu_base[
     (df_osu_base["Discipline Name"] == selected_disc)
     & (df_osu_base["Year"].isin(plot_years))
 ].copy()
-plot_benchmark_row = osu_plot_rows.loc[osu_plot_rows["Year"].idxmax()]
+plot_benchmark_row = osu_plot_rows.loc[
+    (osu_plot_rows["Year"] == latest_year)
+].iloc[0]
 
 
 def plot_quartile(metric_col, percentile):
@@ -409,8 +417,9 @@ fig = plot_simulation(
     df_osu_base=df_osu_base,
     df_osu_sim=df_osu_sim,
     df_other=df_other,
-    latest_peer_year=latest_year,
+    latest_peer_year=peer_benchmark_year,
     latest_year=latest_year,
+    star_tick_interval=star_tick_interval,
     show_simulation=True
 )
 

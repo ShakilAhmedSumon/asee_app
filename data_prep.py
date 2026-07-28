@@ -8,7 +8,14 @@ import matplotlib.cm as cm
 import matplotlib as mpl
 from matplotlib.table import Table
 
-def prepapre_data(df, ug_ft, phd_ft, ttt):
+def prepapre_data(
+    df,
+    ug_ft,
+    phd_ft,
+    ttt,
+    latest_osu_year=2025,
+    peer_benchmark_year=2024,
+):
     df = df.copy()
     df = df.fillna(0)
 
@@ -61,6 +68,23 @@ def prepapre_data(df, ug_ft, phd_ft, ttt):
 
     df["D"] = pd.to_numeric(df["D"], errors="coerce")
     df["D_AAU"] = pd.to_numeric(df["D_AAU"], errors="coerce")
+
+    # OSU has 2025 observations but the peer dataset ends in 2024.
+    # Treat the 2025 OSU point as the new actual point while carrying forward
+    # the discipline's 2024 peer-dependent benchmark.
+    d_benchmark_by_discipline = (
+        d_aau[d_aau["Year"] == peer_benchmark_year]
+        .set_index("Discipline Name")["D_AAU"]
+    )
+    latest_osu_mask = (
+        (df["School Name"] == "Oregon State University")
+        & (df["Year"] == latest_osu_year)
+    )
+    df.loc[latest_osu_mask, "D_AAU"] = (
+        df.loc[latest_osu_mask, "Discipline Name"]
+        .map(d_benchmark_by_discipline)
+        .fillna(df.loc[latest_osu_mask, "D_AAU"])
+    )
 
     df = df.fillna(0)
 
@@ -256,6 +280,29 @@ def prepapre_data(df, ug_ft, phd_ft, ttt):
         star_aau,
         on=["Discipline Name", "Year"],
         how="left"
+    )
+
+    r_benchmark_by_discipline = (
+        r_aau[r_aau["Year"] == peer_benchmark_year]
+        .set_index("Discipline Name")["R_AAU"]
+    )
+    star_benchmark_by_discipline = (
+        star_aau[star_aau["Year"] == peer_benchmark_year]
+        .set_index("Discipline Name")["STAR_AAU"]
+    )
+    latest_osu_mask = (
+        (df["School Name"] == "Oregon State University")
+        & (df["Year"] == latest_osu_year)
+    )
+    df.loc[latest_osu_mask, "R_AAU"] = (
+        df.loc[latest_osu_mask, "Discipline Name"]
+        .map(r_benchmark_by_discipline)
+        .fillna(df.loc[latest_osu_mask, "R_AAU"])
+    )
+    df.loc[latest_osu_mask, "STAR_AAU"] = (
+        df.loc[latest_osu_mask, "Discipline Name"]
+        .map(star_benchmark_by_discipline)
+        .fillna(df.loc[latest_osu_mask, "STAR_AAU"])
     )
 
     # Backward-compatible benchmark alias
